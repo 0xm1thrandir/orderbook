@@ -1,52 +1,65 @@
 package grpc
 
 import (
-    "context"
-    "net"
-    "sync"
+	"context"
+	"log"
+	"net"
+	"sync"
 
-    "google.golang.org/grpc"
+	"google.golang.org/grpc"
+	pb "github.com/0xm1thrandir/orderbook/proto"
 )
 
-type Client struct {
-    stream MidpointService_GetMidpointServer
-}
-
 type CustomMidpointServer struct {
-    MidpointServiceServer
-    clients []*Client
-    mtx     sync.Mutex
+	pb.UnimplementedMidpointServiceServer
+	mu          sync.Mutex
+	clients     map[string]pb.MidpointService_GetMidpointServer
+	nextClientID int
 }
 
-func (s *CustomMidpointServer) GetMidpoint(req *MidpointRequest, stream MidpointService_GetMidpointServer) error {
-    client := &Client{stream: stream}
-    s.mtx.Lock()
-    s.clients = append(s.clients, client)
-    s.mtx.Unlock()
+func (s *CustomMidpointServer) GetMidpoint(req *pb.MidpointRequest, stream pb.MidpointService_GetMidpointServer) error {
+	s.mu.Lock()
+	id := s.nextClientID
+	s.nextClientID++
+	s.clients[id] = stream
+	s.mu.Unlock()
 
-    // Keep the stream open for updates
-    <-stream.Context().Done()
+	defer func() {
+		s.mu.Lock()
+		delete(s.clients, id)
+		s.mu.Unlock()
+	}()
 
-    return nil
+	<-stream.Context().Done()
+	return nil
 }
 
 func (s *CustomMidpointServer) SendMidpoint(midpoint float64) {
-    s.mtx.Lock()
-    for _, client := range s.clients {
-        client.stream.Send(&MidpointResponse{Midpoint: midpoint})
-    }
-    s.mtx.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, client := range s.clients {
+		err := client.Send(&pb.MidpointResponse{Midpoint: midpoint})
+		if err != nil {
+			log.Printf("Failed to send midpoint to client: %v", err)
+		}
+	}
+}
+
+func NewServer() *CustomMidpointServer {
+	return &CustomMidpointServer{
+		clients: make(map[string]pb.MidpointService_GetMidpointServer),
+	}
 }
 
 func StartServer(address string) error {
-    listener, err := net.Listen("tcp", address)
-    if err != nil {
-        return err
-    }
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
 
-    server := grpc.NewServer()
-    customServer := &CustomMidpointServer{}
-    RegisterMidpointServiceServer(server, customServer)
+	server := grpc.NewServer()
+	pb.RegisterMidpointServiceServer(server, NewServer())
 
-    return server.Serve(listener)
+	return server.Serve(listener)
 }

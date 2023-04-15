@@ -1,7 +1,6 @@
 package grpc
 
 import (
-	"context"
 	"log"
 	"net"
 	"sync"
@@ -13,7 +12,7 @@ import (
 type CustomMidpointServer struct {
 	pb.UnimplementedMidpointServiceServer
 	mu          sync.Mutex
-	clients     map[string]pb.MidpointService_GetMidpointServer
+	clients     map[int]pb.MidpointService_GetMidpointServer
 	nextClientID int
 }
 
@@ -48,7 +47,7 @@ func (s *CustomMidpointServer) SendMidpoint(midpoint float64) {
 
 func NewServer() *CustomMidpointServer {
 	return &CustomMidpointServer{
-		clients: make(map[string]pb.MidpointService_GetMidpointServer),
+		clients: make(map[int]pb.MidpointService_GetMidpointServer),
 	}
 }
 

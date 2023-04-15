@@ -1,8 +1,10 @@
 package binance
 
 import (
-	"encoding/json"
-	"fmt"
+	
+        "encoding/json"
+	"strconv"
+        "fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -64,7 +66,6 @@ func StartWebSocket(symbol string) error {
 }
 
 
-
 func GetOrderBook(symbol string, limit int) (*OrderBook, error) {
 	url := fmt.Sprintf("%s/api/v3/depth?symbol=%s&limit=%d", BaseURL, symbol, limit)
 	resp, err := http.Get(url)
@@ -78,13 +79,50 @@ func GetOrderBook(symbol string, limit int) (*OrderBook, error) {
 		return nil, err
 	}
 
-	var orderBook OrderBook
-	if err := json.Unmarshal(body, &orderBook); err != nil {
+	var rawOrderBook struct {
+		Bids [][2]string `json:"bids"`
+		Asks [][2]string `json:"asks"`
+	}
+	if err := json.Unmarshal(body, &rawOrderBook); err != nil {
 		return nil, err
 	}
 
-	return &orderBook, nil
+	orderBook := &OrderBook{
+		Bids: make([][2]string, len(rawOrderBook.Bids)),
+                Asks: make([][2]string, len(rawOrderBook.Asks)),
+	}
+
+	for i, bid := range rawOrderBook.Bids {
+		price, err := strconv.ParseFloat(bid[0], 64)
+		if err != nil {
+			return nil, err
+		}
+		amount, err := strconv.ParseFloat(bid[1], 64)
+		if err != nil {
+			return nil, err
+		}
+		orderBook.Bids[i] = [2]string{strconv.FormatFloat(price, 'f', -1, 64), strconv.FormatFloat(amount, 'f', -1, 64)}
+
+	}
+
+	for i, ask := range rawOrderBook.Asks {
+		price, err := strconv.ParseFloat(ask[0], 64)
+		if err != nil {
+			return nil, err
+		}
+		amount, err := strconv.ParseFloat(ask[1], 64)
+		if err != nil {
+			return nil, err
+		}
+		orderBook.Asks[i] = [2]string{strconv.FormatFloat(price, 'f', -1, 64), strconv.FormatFloat(amount, 'f', -1, 64)}
+	}
+
+	return orderBook, nil
 }
+
+
+
+
 
 var wsDialer = websocket.DefaultDialer
 

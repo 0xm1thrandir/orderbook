@@ -7,11 +7,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MidpointServer struct {
+type CustomMidpointServer struct {
 	MidpointServer
 }
 
-func (s *MidpointServer) GetMidpoint(ctx context.Context, req *MidpointRequest) (*MidpointResponse, error) {
+func (s *CustomMidpointServer) GetMidpoint(ctx context.Context, req *MidpointRequest) (*MidpointResponse, error) {
 	// Calculate the aggregated midpoint and return it as a response.
 	midpoint := 0.0 // Replace this with the actual calculation.
 	return &MidpointResponse{Midpoint: midpoint}, nil
@@ -24,7 +24,7 @@ func StartServer(address string) error {
 	}
 
 	server := grpc.NewServer()
-	RegisterMidpointServer(server, &MidpointServer{})
+	RegisterMidpointServer(server, &CustomMidpointServer{})
 
 	return server.Serve(listener)
 }

@@ -2,10 +2,8 @@ package main
 
 import (
 	"log"
-	"time"
-
-	"github.com/0xm1thrandir/orderbook/pkg/binance"
-	"github.com/0xm1thrandir/orderbook/pkg/grpc"
+        "github.com/0xm1thrandir/orderbook/pkg/binance"
+        "github.com/0xm1thrandir/orderbook/pkg/grpc"
 )
 
 func main() {

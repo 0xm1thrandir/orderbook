@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "github.com/0xm1thrandir/orderbook/pkg/grpc";
+
+package grpc;
+
+service Midpoint {
+  rpc GetMidpoint (MidpointRequest) returns (MidpointResponse);
+}
+
+message MidpointRequest {}
+
+message MidpointResponse {
+  double midpoint = 1;
+}
+

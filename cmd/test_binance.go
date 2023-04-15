@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"github.com/0xm1thdandir/orderbook/pkg/binance"

@@ -4,7 +4,7 @@
 // - protoc             v4.22.3
 // source: proto/midpoint.proto
 
-package pb
+package grpc
 
 import (
 	context "context"
@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MidpointServiceClient interface {
-	GetMidpoint(ctx context.Context, in *MidpointRequest, opts ...grpc.CallOption) (*MidpointResponse, error)
+	GetMidpoint(ctx context.Context, in *MidpointRequest, opts ...grpc.CallOption) (MidpointService_GetMidpointClient, error)
 }
 
 type midpointServiceClient struct {
@@ -37,20 +37,43 @@ func NewMidpointServiceClient(cc grpc.ClientConnInterface) MidpointServiceClient
 	return &midpointServiceClient{cc}
 }
 
-func (c *midpointServiceClient) GetMidpoint(ctx context.Context, in *MidpointRequest, opts ...grpc.CallOption) (*MidpointResponse, error) {
-	out := new(MidpointResponse)
-	err := c.cc.Invoke(ctx, MidpointService_GetMidpoint_FullMethodName, in, out, opts...)
+func (c *midpointServiceClient) GetMidpoint(ctx context.Context, in *MidpointRequest, opts ...grpc.CallOption) (MidpointService_GetMidpointClient, error) {
+	stream, err := c.cc.NewStream(ctx, &MidpointService_ServiceDesc.Streams[0], MidpointService_GetMidpoint_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &midpointServiceGetMidpointClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MidpointService_GetMidpointClient interface {
+	Recv() (*MidpointResponse, error)
+	grpc.ClientStream
+}
+
+type midpointServiceGetMidpointClient struct {
+	grpc.ClientStream
+}
+
+func (x *midpointServiceGetMidpointClient) Recv() (*MidpointResponse, error) {
+	m := new(MidpointResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // MidpointServiceServer is the server API for MidpointService service.
 // All implementations must embed UnimplementedMidpointServiceServer
 // for forward compatibility
 type MidpointServiceServer interface {
-	GetMidpoint(context.Context, *MidpointRequest) (*MidpointResponse, error)
+	GetMidpoint(*MidpointRequest, MidpointService_GetMidpointServer) error
 	mustEmbedUnimplementedMidpointServiceServer()
 }
 
@@ -58,8 +81,8 @@ type MidpointServiceServer interface {
 type UnimplementedMidpointServiceServer struct {
 }
 
-func (UnimplementedMidpointServiceServer) GetMidpoint(context.Context, *MidpointRequest) (*MidpointResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetMidpoint not implemented")
+func (UnimplementedMidpointServiceServer) GetMidpoint(*MidpointRequest, MidpointService_GetMidpointServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetMidpoint not implemented")
 }
 func (UnimplementedMidpointServiceServer) mustEmbedUnimplementedMidpointServiceServer() {}
 
@@ -74,22 +97,25 @@ func RegisterMidpointServiceServer(s grpc.ServiceRegistrar, srv MidpointServiceS
 	s.RegisterService(&MidpointService_ServiceDesc, srv)
 }
 
-func _MidpointService_GetMidpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MidpointRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _MidpointService_GetMidpoint_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MidpointRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(MidpointServiceServer).GetMidpoint(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MidpointService_GetMidpoint_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MidpointServiceServer).GetMidpoint(ctx, req.(*MidpointRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(MidpointServiceServer).GetMidpoint(m, &midpointServiceGetMidpointServer{stream})
+}
+
+type MidpointService_GetMidpointServer interface {
+	Send(*MidpointResponse) error
+	grpc.ServerStream
+}
+
+type midpointServiceGetMidpointServer struct {
+	grpc.ServerStream
+}
+
+func (x *midpointServiceGetMidpointServer) Send(m *MidpointResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 // MidpointService_ServiceDesc is the grpc.ServiceDesc for MidpointService service.
@@ -98,12 +124,13 @@ func _MidpointService_GetMidpoint_Handler(srv interface{}, ctx context.Context, 
 var MidpointService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.MidpointService",
 	HandlerType: (*MidpointServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "GetMidpoint",
-			Handler:    _MidpointService_GetMidpoint_Handler,
+			StreamName:    "GetMidpoint",
+			Handler:       _MidpointService_GetMidpoint_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/midpoint.proto",
 }

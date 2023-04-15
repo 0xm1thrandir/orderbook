@@ -2,26 +2,37 @@ package grpc
 
 import (
 	"context"
+	"log"
+	"time"
 
-	"google.golang.org/grpc"
+	pb "github.com/0xm1thrandir/orderbook/proto"
+	grpcLib "google.golang.org/grpc"
 )
 
-func GetMidpoint(client MidpointClient) (float64, error) {
-	req := &MidpointRequest{}
-	resp, err := client.GetMidpoint(context.Background(), req)
+func StartClient(address string) {
+	conn, err := grpcLib.Dial(address, grpcLib.WithInsecure(), grpcLib.WithBlock())
 	if err != nil {
-		return 0, err
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := pb.NewMidpointServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	stream, err := client.GetMidpoint(ctx, &pb.MidpointRequest{})
+	if err != nil {
+		log.Fatalf("Failed to get midpoint: %v", err)
 	}
 
-	return resp.Midpoint, nil
-}
-
-func ConnectClient(address string) (MidpointClient, error) {
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		return nil, err
+	for {
+		res, err := stream.Recv()
+		if err != nil {
+			log.Printf("Error receiving midpoint: %v", err)
+			break
+		}
+		log.Printf("Received midpoint: %f", res.GetMidpoint())
 	}
-
-	return NewMidpointClient(conn), nil
 }
 

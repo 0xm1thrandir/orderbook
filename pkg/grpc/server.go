@@ -5,31 +5,38 @@ import (
 	"net"
 	"sync"
 
+	"github.com/0xm1thrandir/orderbook/pkg/grpc/pb"
 	"google.golang.org/grpc"
-	pb "github.com/0xm1thrandir/orderbook/proto"
 )
 
 type CustomMidpointServer struct {
 	pb.UnimplementedMidpointServiceServer
-	mu          sync.Mutex
-	clients     map[int]pb.MidpointService_GetMidpointServer
-	nextClientID int
+	mu       sync.Mutex
+	clients  map[string]pb.MidpointService_MidpointServer
+	nextID   int
 }
 
-func (s *CustomMidpointServer) GetMidpoint(req *pb.MidpointRequest, stream pb.MidpointService_GetMidpointServer) error {
+func NewServer() *CustomMidpointServer {
+	return &CustomMidpointServer{
+		clients: make(map[string]pb.MidpointService_MidpointServer),
+		nextID:  1,
+	}
+}
+
+func (s *CustomMidpointServer) GetMidpoint(req *pb.MidpointRequest, stream pb.MidpointService_MidpointServer) error {
 	s.mu.Lock()
-	id := s.nextClientID
-	s.nextClientID++
-	s.clients[id] = stream
+	id := s.nextID
+	s.nextID++
+	s.clients[strconv.Itoa(id)] = stream
 	s.mu.Unlock()
 
-	defer func() {
-		s.mu.Lock()
-		delete(s.clients, id)
-		s.mu.Unlock()
-	}()
-
+	// This will block the stream, waiting for it to be closed by the client.
 	<-stream.Context().Done()
+
+	s.mu.Lock()
+	delete(s.clients, strconv.Itoa(id))
+	s.mu.Unlock()
+
 	return nil
 }
 
@@ -37,17 +44,11 @@ func (s *CustomMidpointServer) SendMidpoint(midpoint float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	response := &pb.MidpointResponse{Midpoint: midpoint}
 	for _, client := range s.clients {
-		err := client.Send(&pb.MidpointResponse{Midpoint: midpoint})
-		if err != nil {
+		if err := client.Send(response); err != nil {
 			log.Printf("Failed to send midpoint to client: %v", err)
 		}
-	}
-}
-
-func NewServer() *CustomMidpointServer {
-	return &CustomMidpointServer{
-		clients: make(map[int]pb.MidpointService_GetMidpointServer),
 	}
 }
 
@@ -62,3 +63,4 @@ func StartServer(address string) error {
 
 	return server.Serve(listener)
 }
+

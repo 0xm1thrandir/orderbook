@@ -3,8 +3,8 @@ package grpc
 import (
 	"log"
 	"net"
+	"strconv"
 	"sync"
-	"context"
 
 	pb "github.com/0xm1thrandir/orderbook/proto"
 	grpcLib "google.golang.org/grpc"
@@ -18,7 +18,7 @@ type CustomMidpointServer struct {
 	updateSignal chan float64
 }
 
-func NewServer() *CustomMidpointServer {
+func NewCustomMidpointServer() *CustomMidpointServer {
 	return &CustomMidpointServer{
 		clients:      make(map[string]pb.MidpointService_GetMidpointServer),
 		clientMutex:  sync.Mutex{},
@@ -27,12 +27,33 @@ func NewServer() *CustomMidpointServer {
 	}
 }
 
-func (s *CustomMidpointServer) GetMidpoint(stream pb.MidpointService_GetMidpointServer) error {
-    return &pb.MidpointResponse{
-        Midpoint: 0.0, // Replace 0.0 with the actual midpoint value you want to return
-    }, nil
-}
+func (s *CustomMidpointServer) GetMidpoint(req *pb.MidpointRequest, stream pb.MidpointService_GetMidpointServer) error {
+	log.Println("Client connected")
 
+	s.clientMutex.Lock()
+	id := strconv.Itoa(s.clientID)
+	s.clients[id] = stream
+	s.clientID++
+	s.clientMutex.Unlock()
+	log.Printf("New client connected: %s", id) // Add this line
+
+	// Wait for updates and send them to the client
+	for midpoint := range s.updateSignal {
+		res := &pb.MidpointResponse{
+			Midpoint: midpoint,
+		}
+
+		if err := stream.Send(res); err != nil {
+			log.Printf("Error sending midpoint to client %s: %v", id, err)
+			s.clientMutex.Lock()
+			delete(s.clients, id)
+			s.clientMutex.Unlock()
+			return err
+		}
+	}
+
+	return nil
+}
 
 func (s *CustomMidpointServer) SendMidpoint(midpoint float64) {
 	s.clientMutex.Lock()

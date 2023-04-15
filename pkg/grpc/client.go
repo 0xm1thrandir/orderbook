@@ -10,13 +10,15 @@ import (
 )
 
 func StartClient(address string) {
-	conn, err := grpcLib.Dial(address, grpcLib.WithInsecure(), grpcLib.WithBlock())
+	conn, err := grpcLib.Dial(address, grpcLib.WithInsecure(), 
+grpcLib.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
 	defer conn.Close()
 
 	client := pb.NewMidpointServiceClient(conn)
+	log.Println("Connected to server")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -25,6 +27,7 @@ func StartClient(address string) {
 	if err != nil {
 		log.Fatalf("Failed to get midpoint: %v", err)
 	}
+        log.Println("Connected to the server") // Add this line
 
 	for {
 		res, err := stream.Recv()
@@ -35,4 +38,3 @@ func StartClient(address string) {
 		log.Printf("Received midpoint: %f", res.GetMidpoint())
 	}
 }
-

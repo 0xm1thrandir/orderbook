@@ -1,31 +1,52 @@
 package grpc
 
 import (
-	"context"
-	"net"
+    "context"
+    "net"
+    "sync"
 
-	"google.golang.org/grpc"
+    "google.golang.org/grpc"
 )
 
-type CustomMidpointServer struct {
-	MidpointServer
+type Client struct {
+    stream MidpointService_GetMidpointServer
 }
 
-func (s *CustomMidpointServer) GetMidpoint(ctx context.Context, req *MidpointRequest) (*MidpointResponse, error) {
-	// Calculate the aggregated midpoint and return it as a response.
-	midpoint := 0.0 // Replace this with the actual calculation.
-	return &MidpointResponse{Midpoint: midpoint}, nil
+type CustomMidpointServer struct {
+    MidpointServiceServer
+    clients []*Client
+    mtx     sync.Mutex
+}
+
+func (s *CustomMidpointServer) GetMidpoint(req *MidpointRequest, stream MidpointService_GetMidpointServer) error {
+    client := &Client{stream: stream}
+    s.mtx.Lock()
+    s.clients = append(s.clients, client)
+    s.mtx.Unlock()
+
+    // Keep the stream open for updates
+    <-stream.Context().Done()
+
+    return nil
+}
+
+func (s *CustomMidpointServer) SendMidpoint(midpoint float64) {
+    s.mtx.Lock()
+    for _, client := range s.clients {
+        client.stream.Send(&MidpointResponse{Midpoint: midpoint})
+    }
+    s.mtx.Unlock()
 }
 
 func StartServer(address string) error {
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		return err
-	}
+    listener, err := net.Listen("tcp", address)
+    if err != nil {
+        return err
+    }
 
-	server := grpc.NewServer()
-	RegisterMidpointServer(server, &CustomMidpointServer{})
+    server := grpc.NewServer()
+    customServer := &CustomMidpointServer{}
+    RegisterMidpointServiceServer(server, customServer)
 
-	return server.Serve(listener)
+    return server.Serve(listener)
 }
-

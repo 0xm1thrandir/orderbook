@@ -4,7 +4,7 @@
 // - protoc             v4.22.3
 // source: proto/midpoint.proto
 
-package grpc
+package pb
 
 import (
 	context "context"

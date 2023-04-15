@@ -1,54 +1,50 @@
 package grpc
-
 import (
 	"log"
 	"net"
+	"strconv"
 	"sync"
 
-	"github.com/0xm1thrandir/orderbook/pkg/grpc/pb"
-	"google.golang.org/grpc"
+	pb "github.com/0xm1thrandir/orderbook/pkg/grpc/pb"
+	grpcLib "google.golang.org/grpc"
 )
 
 type CustomMidpointServer struct {
 	pb.UnimplementedMidpointServiceServer
-	mu       sync.Mutex
-	clients  map[string]pb.MidpointService_MidpointServer
-	nextID   int
+	clients   map[string]pb.MidpointService_MidpointServer
+	clientMtx sync.Mutex
 }
 
-func NewServer() *CustomMidpointServer {
-	return &CustomMidpointServer{
-		clients: make(map[string]pb.MidpointService_MidpointServer),
-		nextID:  1,
-	}
-}
+func (s *CustomMidpointServer) GetMidpoint(_ *pb.MidpointRequest, stream pb.MidpointService_MidpointServer) error {
+	clientID := strconv.Itoa(len(s.clients))
+	s.clientMtx.Lock()
+	s.clients[clientID] = stream
+	s.clientMtx.Unlock()
 
-func (s *CustomMidpointServer) GetMidpoint(req *pb.MidpointRequest, stream pb.MidpointService_MidpointServer) error {
-	s.mu.Lock()
-	id := s.nextID
-	s.nextID++
-	s.clients[strconv.Itoa(id)] = stream
-	s.mu.Unlock()
-
-	// This will block the stream, waiting for it to be closed by the client.
+	// Keep the connection open.
 	<-stream.Context().Done()
 
-	s.mu.Lock()
-	delete(s.clients, strconv.Itoa(id))
-	s.mu.Unlock()
+	// Remove the client from the list when the connection is closed.
+	s.clientMtx.Lock()
+	delete(s.clients, clientID)
+	s.clientMtx.Unlock()
 
 	return nil
 }
 
 func (s *CustomMidpointServer) SendMidpoint(midpoint float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.clientMtx.Lock()
+	defer s.clientMtx.Unlock()
 
-	response := &pb.MidpointResponse{Midpoint: midpoint}
+	midpointMessage := &pb.MidpointResponse{Midpoint: midpoint}
 	for _, client := range s.clients {
-		if err := client.Send(response); err != nil {
-			log.Printf("Failed to send midpoint to client: %v", err)
-		}
+		client.Send(midpointMessage)
+	}
+}
+
+func NewServer() *CustomMidpointServer {
+	return &CustomMidpointServer{
+		clients: make(map[string]pb.MidpointService_MidpointServer),
 	}
 }
 
@@ -58,9 +54,9 @@ func StartServer(address string) error {
 		return err
 	}
 
-	server := grpc.NewServer()
+	server := grpcLib.NewServer()
 	pb.RegisterMidpointServiceServer(server, NewServer())
 
+	log.Printf("gRPC server started on %s", address)
 	return server.Serve(listener)
 }
-

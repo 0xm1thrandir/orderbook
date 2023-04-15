@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package grpc;
 
-option go_package = "github.com/0xm1thrandir/orderbook/pkg/grpc";
+option go_package = "github.com/0xm1thrandir/orderbook/pkg/grpc/pb";
 
 service MidpointService {
     rpc GetMidpoint (MidpointRequest) returns (MidpointResponse);
